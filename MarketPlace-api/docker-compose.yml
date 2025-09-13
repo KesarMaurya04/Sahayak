@@ -1,0 +1,40 @@
+version: "3.9"
+services:
+  mongo:
+    image: mongo:7-jammy
+    restart: unless-stopped
+    ports:
+      - "27017:27017"          # expose for local tools (optional; remove in prod)
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server","--appendonly","yes"]
+    restart: unless-stopped
+    ports:
+      - "6379:6379"            # expose for local tools (optional; remove in prod)
+    volumes:
+      - redis-data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env             # we’ll create this next
+    environment:
+      # override to docker network hostnames
+      MONGO_URI: "mongodb://mongo:27017/marketplace"
+      REDIS_URL: "redis://redis:6379"
+      REDIS_ENABLED: "true"
+      NODE_ENV: "production"
+    depends_on:
+      - mongo
+      - redis
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  redis-data:
