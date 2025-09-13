@@ -1,10 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { User, USER_ROLES } from '../models/User';
-import { signAccessToken } from '../utils/jwt';
+import { signAccessToken, generateRefreshToken, hashToken } from '../utils/jwt';
 import { validate } from '../middlewares/validate';
 import bcrypt from 'bcryptjs';
 import { requireAuth } from '../middlewares/auth';
+import { setAccessCookie, setRefreshCookie, clearAuthCookies } from '../utils/cookies';
+import { RefreshToken } from '../models/RefreshToken';
+import { config } from '../config';
+import { rateLimitAuth } from '../middlewares/rateLimit';
 
 const router = Router();
 
@@ -25,8 +29,21 @@ const loginSchema = z.object({
   })
 });
 
+// Helpers
+async function issueSession(res: Response, user: any) {
+  const access = signAccessToken({ id: user._id.toString(), email: user.email, name: user.name, role: user.role });
+  const refresh = generateRefreshToken();
+  const refreshHash = hashToken(refresh);
+  const expiresAt = new Date(Date.now() + config.refreshTokenTtlDays * 24 * 60 * 60 * 1000);
+
+  await RefreshToken.create({ userId: user._id, tokenHash: refreshHash, expiresAt });
+
+  setAccessCookie(res, access);
+  setRefreshCookie(res, refresh);
+}
+
 // Register
-router.post('/register', validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/register', rateLimitAuth(), validate(registerSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, email, password, role } = req.body as any;
 
@@ -34,17 +51,17 @@ router.post('/register', validate(registerSchema), async (req: Request, res: Res
     if (exists) return res.status(400).json({ message: 'Email already in use' });
 
     const user = await User.create({ name, email, password, role });
-    const token = signAccessToken({ id: user._id.toString(), email: user.email, name: user.name, role: user.role });
+    await issueSession(res, user);
 
     res.status(201).json({
-      token,
       user: { id: user._id, name: user.name, email: user.email, role: user.role }
+      // tokens are in cookies; we don't return them in body
     });
   } catch (e) { next(e); }
 });
 
 // Login
-router.post('/login', validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/login', rateLimitAuth(), validate(loginSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password } = req.body as any;
     const user = await User.findOne({ email }).select('+password');
@@ -54,13 +71,54 @@ router.post('/login', validate(loginSchema), async (req: Request, res: Response,
     const ok = await user.comparePassword(password);
     if (!ok) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = signAccessToken({ id: user._id.toString(), email: user.email, name: user.name, role: user.role });
+    await issueSession(res, user);
+
     res.json({
-      token,
       user: { id: user._id, name: user.name, email: user.email, role: user.role }
     });
   } catch (e) { next(e); }
 });
+
+// Refresh access token (rotate refresh token)
+router.post('/refresh', rateLimitAuth(), async (req: Request, res: Response) => {
+  const refresh = (req as any).cookies?.refresh_token as string | undefined;
+  if (!refresh) return res.status(401).json({ message: 'Missing refresh token' });
+
+  const refreshHash = hashToken(refresh);
+  const record = await RefreshToken.findOne({ tokenHash: refreshHash });
+  if (!record) return res.status(401).json({ message: 'Invalid refresh token' });
+  if (record.expiresAt.getTime() < Date.now()) {
+    await record.deleteOne().catch(() => {});
+    return res.status(401).json({ message: 'Expired refresh token' });
+  }
+
+  // Load user
+  const user = await User.findById(record.userId);
+  if (!user) {
+    await record.deleteOne().catch(() => {});
+    return res.status(401).json({ message: 'Unknown user' });
+  }
+
+  // rotate: delete old, issue new
+  await record.deleteOne().catch(() => {});
+  await issueSession(res, user);
+
+  res.json({ ok: true });
+});
+
+// Logout
+router.post('/logout', requireAuth, async (req: Request, res: Response) => {
+  // Try to revoke current refresh token
+  const refresh = (req as any).cookies?.refresh_token as string | undefined;
+  if (refresh) {
+    const refreshHash = hashToken(refresh);
+    await RefreshToken.findOneAndDelete({ tokenHash: refreshHash }).catch(() => {});
+  }
+  clearAuthCookies(res);
+  res.json({ ok: true });
+});
+
+
 
 // Me
 router.get('/me', requireAuth, async (req: Request, res: Response) => {
