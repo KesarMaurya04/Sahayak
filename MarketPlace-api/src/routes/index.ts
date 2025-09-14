@@ -9,6 +9,7 @@ import bookings from './bookings';
 import reviews from './reviews';
 import support from './support';
 import { pingRedis } from '../redis';
+import aiSupport from './support.ai';
 
 const router = Router();
 
@@ -31,5 +32,6 @@ router.use('/availability', availability);
 router.use('/bookings', bookings);
 router.use('/reviews', reviews);
 router.use('/support', support);
+router.use('/support/ai', aiSupport);
 
 export default router;

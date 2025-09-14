@@ -26,6 +26,7 @@
     "pino": "^9.9.5",
     "pino-http": "^10.5.0",
     "rate-limiter-flexible": "^7.3.0",
+    "razorpay": "^2.9.6",
     "zod": "^4.1.8"
   },
   "devDependencies": {

@@ -34,7 +34,24 @@ services:
     ports:
       - "4000:4000"
     restart: unless-stopped
+    
+  
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"        # optional expose for local testing
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
 
 volumes:
   mongo-data:
   redis-data:
+  ollama-data:
+
+
+
+
+  
