@@ -1,12 +1,12 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import pinoHttp from 'pino-http';                 // NEW
-import { randomUUID } from 'crypto';              // NEW
+import pinoHttp from 'pino-http';                
+import { randomUUID } from 'crypto';              
 import routes from './routes';
 import { errorHandler } from './middlewares/error';
 import { config } from './config';
-import { logger } from './utils/logger';          // NEW
+import { logger } from './utils/logger';          
 import { rateLimitGlobal } from './middlewares/rateLimit';
 
 export function createApp() {
