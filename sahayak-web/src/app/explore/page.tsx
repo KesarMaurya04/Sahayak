@@ -1,54 +1,95 @@
 'use client';
-import { useState } from 'react';
-import { apiFetch } from '@/lib/api';
+ 
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-
+import { useRouter, useSearchParams } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
+import { qs } from '@/lib/url';
+import FiltersBar, { Filters } from '@/components/FiltersBar';
+import ListingCard from '@/components/ListingCard';
+ 
 type Listing = { _id: string; title: string; price: number; avgRating?: number; onSite?: boolean };
-
+type SearchResp = { items: Listing[]; total?: number; page?: number; limit?: number };
+ 
 export default function ExplorePage() {
-  const [q, setQ] = useState('');
-  const { data, isFetching, refetch } = useQuery({
-    queryKey: ['search', q],
-    queryFn: async () => {
-      const url = q ? `/api/listings/search?q=${encodeURIComponent(q)}` : '/api/listings/search';
-      const r = await apiFetch<{ items: Listing[] }>(url);
-      return r.items;
-    },
-    initialData: [],
-  });
+  const router = useRouter();
+  const sp = useSearchParams();
+ 
+  // read filters from URL
+  const initial: Partial<Filters> = useMemo(() => {
+    const getNum = (k: string) => {
+      const v = sp.get(k);
+      return v ? Number(v) : undefined;
+    };
+    return {
+      q: sp.get('q') || undefined,
+      categoryId: sp.get('categoryId') || undefined,
+      onsite: sp.get('onsite') === 'true' ? true : undefined,
+      minPrice: getNum('minPrice'),
+      maxPrice: getNum('maxPrice'),
+      sort: (sp.get('sort') as Filters['sort']) || 'relevance',
+      lat: getNum('lat'),
+      lng: getNum('lng'),
+      radiusKm: getNum('radiusKm'),
+    };
+  }, [sp]);
+ 
+  // Build query string for backend
+  const query = useMemo(() => {
+    return qs({
+      q: initial.q,
+      categoryId: initial.categoryId,
+      onsite: initial.onsite,
+      minPrice: initial.minPrice,
+      maxPrice: initial.maxPrice,
+      sort: initial.sort !== 'relevance' ? initial.sort : undefined,
+      lat: initial.lat,
+      lng: initial.lng,
+      radiusKm: initial.radiusKm,
+      limit: 20,
+    });
+  }, [initial]);
+ 
+const { data, isFetching } = useQuery<Listing[]>({
+  queryKey: ['search', query],
+  queryFn: async () => {
+    const r = await apiFetch<SearchResp>(`/api/listings/search${query}`);
+    return r.items ?? [];
+  },
+  placeholderData: [],
+  staleTime: 5000, // optional, keeps data fresh for 5 seconds
+});
 
+
+ 
+  const apply = (f: Partial<Filters>) => {
+    // update URL (client side)
+    const next = qs({
+      q: f.q,
+      categoryId: f.categoryId,
+      onsite: f.onsite,
+      minPrice: f.minPrice,
+      maxPrice: f.maxPrice,
+      sort: f.sort && f.sort !== 'relevance' ? f.sort : undefined,
+      lat: f.lat,
+      lng: f.lng,
+      radiusKm: f.radiusKm,
+    });
+    router.replace(`/explore${next}`);
+  };
+ 
   return (
-    <section className="card">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <section className="space-y-4">
+      <FiltersBar initial={initial} onApply={apply} />
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Explore</h1>
-        <div className="flex gap-2">
-          <input
-            className="input"
-            placeholder="Search services (e.g. haircut, electrician)"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <button className="btn" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? 'Searching…' : 'Search'}
-          </button>
-        </div>
+        <span className="text-sm text-slate-500">{isFetching ? 'Searching…' : `${data?.length ?? 0} results`}</span>
       </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-        {data?.map((l) => (
-          <article key={l._id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow hover:shadow-soft">
-            <h3 className="text-lg font-medium">{l.title}</h3>
-            <p className="mt-1 text-sm text-slate-600">₹ {l.price}</p>
-            {typeof l.avgRating === 'number' && (
-              <p className="text-xs text-slate-500">Rating: {l.avgRating.toFixed(1)}</p>
-            )}
-            <div className="mt-3">
-              <button className="btn-outline">View</button>
-            </div>
-          </article>
-        ))}
-        {!isFetching && data?.length === 0 && (
-          <p className="text-slate-500">No results yet — try a different keyword.</p>
+ 
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {data?.map((l, i) => <ListingCard key={l._id} item={l} index={i} />)}
+        {!isFetching && (data?.length ?? 0) === 0 && (
+          <p className="text-slate-500">No results — try a different keyword or widen filters.</p>
         )}
       </div>
     </section>

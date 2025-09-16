@@ -30,3 +30,13 @@ export async function sendEmail(to: string, subject: string, html: string) {
   }
   await t.sendMail({ from, to, subject, html });
 }
+
+export async function sendPasswordResetEmail(to: string, name: string, link: string) {
+  const html = `
+    <p>Hi ${name || ''},</p>
+    <p>We received a request to reset your Sahayak password.</p>
+    <p><a href="${link}">Reset your password</a></p>
+    <p>This link expires in 15 minutes. If you didn’t request it, you can safely ignore this email.</p>
+  `;
+  await sendEmail(to, 'Reset your Sahayak password', html);
+}

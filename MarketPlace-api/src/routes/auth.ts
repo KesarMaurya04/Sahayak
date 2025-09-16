@@ -9,6 +9,9 @@ import { setAccessCookie, setRefreshCookie, clearAuthCookies } from '../utils/co
 import { RefreshToken } from '../models/RefreshToken';
 import { config } from '../config';
 import { rateLimitAuth } from '../middlewares/rateLimit';
+import crypto from 'crypto';
+import { PasswordReset } from '../models/PasswordReset';
+import { sendPasswordResetEmail } from '../services/email';
 
 const router = Router();
 
@@ -116,6 +119,61 @@ router.post('/logout', requireAuth, async (req: Request, res: Response) => {
   }
   clearAuthCookies(res);
   res.json({ ok: true });
+});
+
+const emailSchema = z.object({ email: z.string().email() });
+const resetSchema = z.object({
+  email: z.string().email(),
+  token: z.string().min(10),
+  password: z.string().min(6),
+});
+
+// POST /api/auth/forgot-password
+router.post('/auth/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = emailSchema.parse(req.body);
+    const user = await User.findOne({ email: email.toLowerCase() }).select('_id name email');
+    // Always return ok to avoid user enumeration
+    if (user) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+
+      await PasswordReset.deleteMany({ userId: user._id, email: user.email }); // one active token per user
+      await PasswordReset.create({ userId: user._id, email: user.email, tokenHash, expiresAt });
+
+      const appUrl = process.env.APP_URL || 'http://localhost:3000';
+      const link = `${appUrl}/reset-password?token=${token}&email=${encodeURIComponent(user.email)}`;
+      await sendPasswordResetEmail(user.email, user.name || 'there', link);
+    }
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// POST /api/auth/reset-password
+router.post('/auth/reset-password', async (req, res, next) => {
+  try {
+    const { email, token, password } = resetSchema.parse(req.body);
+    const rec = await PasswordReset.findOne({ email: email.toLowerCase() });
+    if (!rec) return res.status(400).json({ message: 'Invalid or expired token' });
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    if (rec.tokenHash !== tokenHash || rec.expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ message: 'Invalid or expired token' });
+    }
+
+    const user = await User.findById(rec.userId).select('+password');
+    if (!user) return res.status(400).json({ message: 'User not found' });
+
+    user.password = password; // pre-save hook hashes
+    await user.save();
+
+    // Clean up tokens / sessions
+    await PasswordReset.deleteMany({ userId: rec.userId });
+    await RefreshToken.deleteMany({ userId: rec.userId });
+
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 

@@ -103,4 +103,24 @@ router.get('/search', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const listing = await Listing.findOne({
+      _id: id,
+      isActive: true,
+      moderationStatus: 'approved'
+    }).populate('category', 'name slug');
+    
+    if (!listing) {
+      return res.status(404).json({ message: 'Listing not found' });
+    }
+    
+    res.json(listing);
+  } catch (e) {
+    next(e);
+  }
+});
+
 export default router;
