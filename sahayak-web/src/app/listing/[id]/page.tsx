@@ -39,7 +39,7 @@ export default function ListingPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const sp = useSearchParams();
-  const nextUrl = useMemo(() => `/listings/68c95d11cd600808d403fac7`, [id]);
+  const nextUrl = useMemo(() => `/listings/${id}`, [id]);
  
   // 1) Listing
   const { data: listing, isLoading: loadingListing, error: errListing } = useQuery({

@@ -6,6 +6,7 @@ import { allowRoles } from '../middlewares/roles';
 import { AvailabilitySlot } from '../models/AvailabilitySlot';
 import { Listing } from '../models/Listing';
 import { getPaging } from '../utils/pagination';
+import mongoose from 'mongoose';
 
 const router = Router();
 
@@ -80,6 +81,64 @@ router.get('/public/:listingId', async (req, res, next) => {
       $expr: { $lt: ['$bookedCount', '$capacity'] }
     }).sort({ start: 1 }).limit(500);
     res.json({ items });
+  } catch (e) { next(e); }
+});
+
+router.get('/public', async (req, res, next) => {
+  try {
+    const { listingId } = req.query as { listingId?: string };
+    if (!listingId || !mongoose.isValidObjectId(listingId)) return res.json({ items: [] });
+    const items = await AvailabilitySlot.find({ listingId, isActive: true }).sort({ start: 1 }).lean();
+    res.json({ items });
+  } catch (e) { next(e); }
+});
+
+// Provider: list my slots (optionally by listing)
+router.get('/mine', requireAuth, async (req, res, next) => {
+  try {
+    const { listingId } = req.query as { listingId?: string };
+    const ownListings = await Listing.find({ owner: req.user!.id }).select('_id').lean();
+    const ids = ownListings.map((l) => l._id);
+    const q: any = { listingId: { $in: ids } };
+    if (listingId && mongoose.isValidObjectId(listingId)) q.listingId = new mongoose.Types.ObjectId(listingId);
+    const items = await AvailabilitySlot.find(q).sort({ start: 1 }).lean();
+    res.json({ items });
+  } catch (e) { next(e); }
+});
+
+const createSchema = z.object({
+  listingId: z.string().min(1),
+  start: z.coerce.date(),
+  end: z.coerce.date(),
+  capacity: z.coerce.number().int().positive().default(1),
+});
+
+router.post('/', requireAuth, async (req, res, next) => {
+  try {
+    const body = createSchema.parse(req.body);
+    const l = await Listing.findOne({ _id: body.listingId, owner: req.user!.id });
+    if (!l) return res.status(403).json({ message: 'Not your listing' });
+    const item = await AvailabilitySlot.create({
+      listingId: l._id,
+      start: body.start,
+      end: body.end,
+      capacity: body.capacity,
+      bookedCount: 0,
+      isActive: true,
+    });
+    res.status(201).json({ item });
+  } catch (e) { next(e); }
+});
+
+router.delete('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const s = await AvailabilitySlot.findById(req.params.id);
+    if (!s) return res.status(404).json({ message: 'Not found' });
+    const l = await Listing.findById(s.listingId);
+    if (!l || String(l.owner) !== req.user!.id) return res.status(403).json({ message: 'Forbidden' });
+    if ((s.bookedCount ?? 0) > 0) return res.status(400).json({ message: 'Cannot delete slot with bookings' });
+    await s.deleteOne();
+    res.json({ ok: true });
   } catch (e) { next(e); }
 });
 

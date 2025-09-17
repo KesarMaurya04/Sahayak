@@ -103,6 +103,13 @@ router.get('/search', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.get('/mine', requireAuth, allowRoles('provider_individual','provider_business','admin'), async (req, res, next) => {
+  try {
+    const items = await Listing.find({ owner: req.user!.id }).sort({ createdAt: -1 }).lean();
+    res.json({ items });
+  } catch (e) { next(e); }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -121,6 +128,37 @@ router.get('/:id', async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+});
+
+
+// Update (owner/admin)
+const updateSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  media: z.array(z.string()).optional(),
+  pricingType: z.enum(['fixed','hourly']).optional(),
+  price: z.number().nonnegative().optional(),
+  onSite: z.boolean().optional(),
+  durationMinutes: z.number().int().positive().optional(),
+  attributes: z.record(z.string(), z.unknown()).optional(),
+  isActive: z.boolean().optional(),
+  location: z.object({ lat: z.number(), lng: z.number() }).optional(),
+});
+
+router.patch('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const body = updateSchema.parse(req.body);
+    const l = await Listing.findById(req.params.id);
+    if (!l) return res.status(404).json({ message: 'Not found' });
+    const isOwner = String(l.owner) === req.user!.id;
+    const isAdmin = req.user!.role === 'admin';
+    if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Forbidden' });
+
+    if (body.location) (body as any).location = { type: 'Point', coordinates: [body.location.lng, body.location.lat] as [number, number] };
+    Object.assign(l, body);
+    await l.save();
+    res.json({ item: l });
+  } catch (e) { next(e); }
 });
 
 export default router;
