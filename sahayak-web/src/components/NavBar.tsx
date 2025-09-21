@@ -16,6 +16,7 @@ export default function NavBar() {
           <Link className="hover:text-brand-700 text-sm" href="/explore">Explore</Link>
           {isLoggedIn && <Link className="hover:text-brand-700 text-sm" href="/dashboard/provider/bookings">Bookings</Link>}
           {isProvider && <Link className="hover:text-brand-700 text-sm" href="/dashboard/provider">Dashboard</Link>}
+          {me?.role === 'admin' && <Link className="hover:text-brand-700 text-sm" href="/dashboard/admin">Admin</Link>}
 
           {isLoggedIn ? (
             <div className="flex items-center gap-3">
