@@ -14,7 +14,7 @@ router.get('/', async (req: Request, res: Response) => {
   const cached = await cacheGet(cacheKey);
   if (cached) return res.json(cached);
 
-  const cats = await Category.find(q).sort({ name: 1 });
+  const cats = await Category.find().sort({ createdAt: -1 });
   await cacheSet(cacheKey, cats, 60); // cache 60s
   res.json(cats);
 });

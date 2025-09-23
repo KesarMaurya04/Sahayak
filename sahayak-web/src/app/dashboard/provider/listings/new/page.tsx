@@ -32,11 +32,12 @@ export default function NewListingPage() {
   const [usingGeo, setUsingGeo] = useState(false);
  
   // Fetch categories
-  const { data: categoriesResp, isLoading: loadingCats, error: catsError } = useQuery({
-    queryKey: ['categories'],
-    queryFn: async () => apiFetch<{ items: Category[] }>('/api/categories'),
-  });
-  const categories = categoriesResp?.items ?? [];
+ const { data: categoriesResp, isLoading: loadingCats, error: catsError } = useQuery({
+  queryKey: ['categories'],
+  queryFn: async () => apiFetch<Category[]>('/api/categories'),
+});
+const categories = categoriesResp ?? []; 
+
  
   const {
     register,
