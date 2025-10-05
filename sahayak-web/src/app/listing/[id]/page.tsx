@@ -71,7 +71,7 @@ export default function ListingPage() {
     setSuccess(null);
     try {
       // Your router returns the appointment doc directly (not {item})
-      const appt = await apiFetch<any>('/api/appointments', {
+      const appt = await apiFetch<any>('/api/bookings', {
         method: 'POST',
         json: { listingId: id, slotId },
       });

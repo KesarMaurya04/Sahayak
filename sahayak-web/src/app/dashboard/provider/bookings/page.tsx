@@ -15,16 +15,16 @@ export default function ProviderBookingsPage() {
  
   const { data, isLoading, error } = useQuery({
     queryKey: ['provider-bookings'],
-    queryFn: async () => (await apiFetch<{ items: Appt[] }>('/api/appointments/provider')).items || [],
+    queryFn: async () => (await apiFetch<{ items: Appt[] }>('/api/bookings/provider')).items || [],
   });
  
   const confirmMut = useMutation({
-    mutationFn: async (id: string) => apiFetch(`/api/appointments/${id}/confirm`, { method: 'PATCH' }),
+    mutationFn: async (id: string) => apiFetch(`/api/bookings/${id}/confirm`, { method: 'PATCH' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['provider-bookings'] }),
   });
  
   const completeMut = useMutation({
-    mutationFn: async (id: string) => apiFetch(`/api/appointments/${id}/complete`, { method: 'PATCH' }),
+    mutationFn: async (id: string) => apiFetch(`/api/bookings/${id}/complete`, { method: 'PATCH' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['provider-bookings'] }),
   });
  

@@ -7,6 +7,7 @@ import { useMe } from '@/hooks/useMe';
 const TABS = [
   { href: '/dashboard/admin/moderation', label: 'Moderation' },
   { href: '/dashboard/admin/categories', label: 'Categories' },
+  { href: '/dashboard/admin/support',    label: 'Support'    }, 
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

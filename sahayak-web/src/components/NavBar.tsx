@@ -5,7 +5,7 @@ import { useMe } from '@/hooks/useMe';
 export default function NavBar() {
   const { data: me } = useMe();
   const isLoggedIn = !!me;
-  const isProvider = !!me && ['provider_individual','provider_business','admin'].includes(me.role);
+  const isProvider = !!me && ['provider_individual','provider_business'].includes(me.role);
 
   return (
     <header className="sticky top-0 z-40 mb-4 border-b border-slate-100 bg-white/70 backdrop-blur">
@@ -13,10 +13,11 @@ export default function NavBar() {
         <Link href="/" className="font-semibold text-brand-700">Sahayak</Link>
 
         <nav className="flex items-center gap-3">
-          <Link className="hover:text-brand-700 text-sm" href="/explore">Explore</Link>
-          {isLoggedIn && <Link className="hover:text-brand-700 text-sm" href="/dashboard/provider/bookings">Bookings</Link>}
+          {me?.role === 'customer'  && <Link className="hover:text-brand-700 text-sm" href="/explore">Explore</Link>}
+          {me?.role === 'customer' && isLoggedIn && <Link className="hover:text-brand-700 text-sm" href="/bookings">Bookings</Link>}
           {isProvider && <Link className="hover:text-brand-700 text-sm" href="/dashboard/provider">Dashboard</Link>}
           {me?.role === 'admin' && <Link className="hover:text-brand-700 text-sm" href="/dashboard/admin">Admin</Link>}
+          {me?.role === 'customer'  && <Link className="hover:text-brand-700 text-sm" href="/support">Support</Link>}
 
           {isLoggedIn ? (
             <div className="flex items-center gap-3">

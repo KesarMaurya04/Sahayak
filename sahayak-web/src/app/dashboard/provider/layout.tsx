@@ -43,6 +43,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
           {link('/dashboard/provider/listings', 'Listings')}
           {link('/dashboard/provider/availability', 'Availability')}
           {link('/dashboard/provider/bookings', 'Bookings')}
+          {link('/dashboard/provider/support', 'Support')}
         </nav>
       </div>
       {children}
