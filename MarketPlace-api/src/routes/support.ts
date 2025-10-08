@@ -4,7 +4,9 @@ import { SupportArticle, Ticket } from '../models/Support';
 import { requireAuth } from '../middlewares/auth';
 import { allowRoles } from '../middlewares/roles';
 import { getPaging } from '../utils/pagination';
+import mongoose from 'mongoose';
 
+const idParam = z.object({ params: z.object({ id: z.string().min(1) }) });
 const router = Router();
 
 // Public FAQ search
@@ -19,6 +21,79 @@ router.get('/faq', async (req, res, next) => {
       SupportArticle.countDocuments(filter)
     ]);
     res.json({ items, total, page, limit });
+  } catch (e) { next(e); }
+});
+
+router.get('/tickets/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { params } = idParam.parse(req);
+    if (!mongoose.isValidObjectId(params.id)) return res.status(400).json({ message: 'Invalid id' });
+
+    const t = await Ticket.findById(params.id).lean();
+    if (!t) return res.status(404).json({ message: 'Not found' });
+
+    const isOwner = String(t.userId) === String(req.user!.id);
+    const isAdmin = req.user!.role === 'admin';
+    if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Forbidden' });
+
+    // Normalize for the frontend expected shape:
+    const messages = (t.messages || []).map((m: any, idx: number) => ({
+      _id: m?._id?.toString?.() ?? `${t._id}-m${idx}`,
+      // frontend ChatBubble expects 'authorType' ('user' | 'agent' | 'ai')
+      authorType: m?.senderType === 'admin' ? 'agent' : 'user',
+      text: m?.text ?? '',
+      createdAt: m?.createdAt ?? t.updatedAt ?? t.createdAt,
+    }));
+
+    const item = {
+      _id: t._id,
+      subject: t.subject,
+      category: t.category,
+      status: t.status,            // e.g., 'open' | 'in_progress' | 'resolved'
+      assignedTo: t.assignedTo,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    };
+
+    // Optional AI/RAG field if you add it later:
+    const ai = undefined;
+
+    return res.json({ item, messages, ai });
+  } catch (e) { next(e); }
+});
+
+// PATCH /api/support/tickets/:id/status  (owner may close/resolve their ticket)
+const statusSchema = z.object({
+  body: z.object({
+    status: z.enum(['resolved', 'closed', 'open']).optional(),
+  }),
+});
+router.patch('/tickets/:id/status', requireAuth, async (req, res, next) => {
+  try {
+    const { params } = idParam.parse(req);
+    const { body } = statusSchema.parse(req);
+
+    const t = await Ticket.findOne({ _id: params.id, userId: req.user!.id });
+    if (!t) return res.status(404).json({ message: 'Not found' });
+
+    // Allowed customer-side transitions (tweak as you prefer)
+    const allowed: Record<string, string[]> = {
+      open: ['resolved', 'closed'],
+      in_progress: ['resolved', 'closed'],
+      resolved: ['closed', 'open'],
+      closed: [],
+    };
+    const from = t.status || 'open';
+    const to = body.status || 'resolved';
+
+    if (!allowed[from]?.includes(to)) {
+      return res.status(400).json({ message: `Cannot change status from ${from} to ${to}` });
+    }
+
+    t.status = to as any;
+    await t.save();
+
+    return res.json({ item: t });
   } catch (e) { next(e); }
 });
 

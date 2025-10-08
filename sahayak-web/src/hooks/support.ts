@@ -6,7 +6,7 @@ import type { Ticket, TicketDetailResponse, TicketMessage, TicketStatus } from '
 export function useMyTickets() {
   return useQuery({
     queryKey: ['support','tickets','mine'],
-    queryFn: async () => (await apiFetch<{ items: Ticket[] }>('/api/support/tickets?mine=1')).items ?? [],
+    queryFn: async () => (await apiFetch<{ items: Ticket[] }>('/api/support/tickets/me')).items ?? [],
   });
 }
  
@@ -21,7 +21,7 @@ export function useAllTickets(params?: { status?: TicketStatus }) {
 export function useTicket(id: string | undefined, opts?: { refetchMs?: number }) {
   return useQuery({
     queryKey: ['support','tickets', id],
-    queryFn: async () => await apiFetch<TicketDetailResponse>(`/api/support/tickets/${id}`),
+    queryFn: async () => await apiFetch<TicketDetailResponse>(`/api/support/tickets/${id}/messages`),
     enabled: !!id,
     refetchInterval: opts?.refetchMs ?? false,
   });
